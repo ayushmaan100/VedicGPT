@@ -1,0 +1,235 @@
+// VedicGPT Database Schema
+// Designed for Bhagavad Gita V1 with multi-scripture extensibility
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============================================================
+// SCRIPTURE DATA
+// ============================================================
+
+/// Represents a scripture (e.g., Bhagavad Gita, Upanishads)
+model Scripture {
+  id          String    @id @default(cuid())
+  name        String    @unique // "Bhagavad Gita"
+  nameHi      String?   @map("name_hi") // "भगवद्गीता"
+  slug        String    @unique // "bhagavad-gita"
+  description String?   @db.Text
+  descriptionHi String? @map("description_hi") @db.Text
+  totalChapters Int     @default(0) @map("total_chapters")
+  totalVerses   Int     @default(0) @map("total_verses")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  chapters    Chapter[]
+
+  @@map("scriptures")
+}
+
+/// A chapter within a scripture
+model Chapter {
+  id              String    @id @default(cuid())
+  chapterNumber   Int       @map("chapter_number")
+  name            String    // Sanskrit name: "अर्जुनविषादयोग"
+  translation     String    // English name: "Arjuna Visada Yoga"
+  transliteration String    // "Arjun Viṣhād Yog"
+  meaningEn       String?   @map("meaning_en") // "Arjuna's Dilemma"
+  meaningHi       String?   @map("meaning_hi") // "अर्जुन विषाद योग"
+  summaryEn       String?   @map("summary_en") @db.Text
+  summaryHi       String?   @map("summary_hi") @db.Text
+  versesCount     Int       @default(0) @map("verses_count")
+  
+  scriptureId     String    @map("scripture_id")
+  scripture       Scripture @relation(fields: [scriptureId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  verses          Verse[]
+
+  @@unique([scriptureId, chapterNumber])
+  @@index([chapterNumber])
+  @@map("chapters")
+}
+
+/// A single verse (shloka)
+model Verse {
+  id              String    @id @default(cuid())
+  verseNumber     Int       @map("verse_number")
+  verseId         String    @unique @map("verse_id") // "BG2.47"
+  
+  // Sanskrit text
+  slok            String    @db.Text // Original Devanagari text
+  transliteration String    @db.Text // Romanized transliteration
+  
+  // Word meanings (optional, structured as JSON)
+  wordMeanings    String?   @map("word_meanings") @db.Text // JSON or plain text
+  
+  chapterId       String    @map("chapter_id")
+  chapter         Chapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  commentaries    Commentary[]
+  translations    Translation[]
+  bookmarks       Bookmark[]
+
+  @@unique([chapterId, verseNumber])
+  @@index([verseNumber])
+  @@index([verseId])
+  @@map("verses")
+}
+
+/// A translation of a verse by a specific author
+model Translation {
+  id          String    @id @default(cuid())
+  language    String    // "en" or "hi"
+  text        String    @db.Text
+  authorName  String    @map("author_name")
+  authorKey   String    @map("author_key") // e.g., "siva", "purohit", "tej"
+  
+  verseId     String    @map("verse_id")
+  verse       Verse     @relation(fields: [verseId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([verseId, authorKey, language])
+  @@index([language])
+  @@index([authorKey])
+  @@map("translations")
+}
+
+/// A commentary on a verse by a philosopher/teacher
+model Commentary {
+  id          String    @id @default(cuid())
+  language    String    // "en", "hi", "sa" (Sanskrit)
+  text        String    @db.Text
+  authorName  String    @map("author_name")
+  authorKey   String    @map("author_key") // e.g., "chinmay", "raman", "madhav"
+  school      String?   // "Advaita", "Vishishtadvaita", "Dvaita"
+  
+  verseId     String    @map("verse_id")
+  verse       Verse     @relation(fields: [verseId], references: [id], onDelete: Cascade)
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  @@unique([verseId, authorKey, language])
+  @@index([language])
+  @@index([authorKey])
+  @@index([school])
+  @@map("commentaries")
+}
+
+// ============================================================
+// USER DATA
+// ============================================================
+
+/// User account
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  password      String?   // Hashed, null for OAuth users
+  
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts      Account[]
+  sessions      Session[]
+  bookmarks     Bookmark[]
+  readProgress  ReadProgress[]
+
+  @@map("users")
+}
+
+/// OAuth accounts (for NextAuth)
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+/// Session storage (for NextAuth)
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+/// Email verification tokens (for NextAuth)
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ============================================================
+// USER FEATURES
+// ============================================================
+
+/// Bookmarked verses
+model Bookmark {
+  id        String   @id @default(cuid())
+  note      String?  @db.Text // User's personal note
+  
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  verseId   String   @map("verse_id")
+  verse     Verse    @relation(fields: [verseId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, verseId])
+  @@index([userId])
+  @@map("bookmarks")
+}
+
+/// Track which verses a user has read
+model ReadProgress {
+  id        String   @id @default(cuid())
+
+  userId    String   @map("user_id")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  chapterNumber Int  @map("chapter_number")
+  verseNumber   Int  @map("verse_number")
+
+  readAt    DateTime @default(now()) @map("read_at")
+
+  @@unique([userId, chapterNumber, verseNumber])
+  @@index([userId])
+  @@map("read_progress")
+}
