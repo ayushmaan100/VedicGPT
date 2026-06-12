@@ -6,6 +6,8 @@ import { Footer } from "@/components/layout/footer";
 import { ArrowLeft, ArrowRight, BookOpen, Quote } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { BookmarkButton } from "@/components/features/bookmark-button";
+import { checkIsBookmarked } from "@/app/actions/bookmark";
 
 export async function generateMetadata({
   params,
@@ -58,6 +60,9 @@ export default async function VersePage({
   const hasNext = verseNumber < chapter.versesCount;
   const hasPrev = verseNumber > 1;
 
+  // Bookmark logic
+  const isBookmarked = await checkIsBookmarked(verse.id);
+
   return (
     <div className="flex min-h-screen flex-col">
       <Header />
@@ -96,6 +101,10 @@ export default async function VersePage({
                 <ArrowRight className="size-4" />
                 <span className="sr-only">Next Verse</span>
               </Link>
+            </div>
+
+            <div className="flex items-center">
+              <BookmarkButton verseId={verse.id} initialBookmarked={isBookmarked} />
             </div>
           </div>
         </div>
