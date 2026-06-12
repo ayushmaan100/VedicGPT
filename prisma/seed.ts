@@ -1,318 +1,184 @@
-import "dotenv/config";
-import { PrismaClient } from "../src/generated/prisma/client";
-
-import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
+import { Pool } from 'pg';
+import { PrismaClient } from '../src/generated/prisma/client';
 
-const connectionString = process.env.DATABASE_URL;
-const pool = new Pool({ connectionString });
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/vedicgpt?schema=public',
+});
+
 const adapter = new PrismaPg(pool);
-
 const prisma = new PrismaClient({ adapter });
 
-// ============================================================
-// Bhagavad Gita Data Seeder
-// Fetches data from the vedicscriptures API and populates the database
-// ============================================================
-
-const API_BASE = "https://vedicscriptures.github.io";
-
-// Author metadata mapping
-const AUTHOR_META: Record<
-  string,
-  { name: string; school?: string; hasEn?: boolean; hasHi?: boolean; hasSanskrit?: boolean }
-> = {
-  siva: { name: "Swami Sivananda", hasEn: true },
-  purohit: { name: "Shri Purohit Swami", hasEn: true },
-  chinmay: { name: "Swami Chinmayananda", hasHi: true },
-  san: { name: "Dr. S. Sankaranarayan", hasEn: true },
-  adi: { name: "Swami Adidevananda", hasEn: true },
-  gambir: { name: "Swami Gambirananda", hasEn: true },
-  madhav: { name: "Sri Madhavacharya", school: "Dvaita", hasSanskrit: true },
-  anand: { name: "Sri Anandgiri", school: "Advaita", hasSanskrit: true },
-  rams: { name: "Swami Ramsukhdas", hasHi: true },
-  raman: { name: "Sri Ramanuja", school: "Vishishtadvaita", hasSanskrit: true },
-  abhinav: { name: "Sri Abhinavgupta", hasSanskrit: true },
-  sankar: { name: "Sri Shankaracharya", school: "Advaita", hasSanskrit: true },
-  jaya: { name: "Sri Jayatritha", school: "Dvaita", hasSanskrit: true },
-  vallabh: { name: "Sri Vallabhacharya", hasSanskrit: true },
-  ms: { name: "Sri Madhusudan Saraswati", hasSanskrit: true },
-  spiegel: { name: "Dr. S. Spiegel", hasEn: true },
-  tej: { name: "Swami Tejomayananda", hasHi: true },
-  prabhu: { name: "A.C. Bhaktivedanta Swami Prabhupada", hasEn: true, hasHi: true },
-  neel: { name: "Sri Neelkanth", hasSanskrit: true },
-  dhan: { name: "Sri Dhanpati", hasSanskrit: true },
-};
-
-interface ChapterData {
-  chapter_number: number;
-  verses_count: number;
-  name: string;
-  translation: string;
-  transliteration: string;
-  meaning: { en: string; hi: string };
-  summary: { en: string; hi: string };
+async function fetchJson(url: string) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.statusText}`);
+  return res.json();
 }
 
-interface VerseData {
-  _id: string;
-  chapter: number;
-  verse: number;
-  slok: string;
-  transliteration: string;
-  [key: string]: unknown;
-}
+async function main() {
+  console.log('🕉  VedicGPT Data Seeder (gita/gita dataset)');
+  console.log('============================================\n');
 
-async function fetchJSON<T>(url: string): Promise<T> {
-  const response = await fetch(url);
-  if (!response.ok) {
-    throw new Error(`Failed to fetch ${url}: ${response.status} ${response.statusText}`);
-  }
-  return response.json() as Promise<T>;
-}
-
-async function seed() {
-  console.log("🕉  VedicGPT Data Seeder");
-  console.log("========================\n");
-
-  // ---- Step 1: Create Scripture ----
-  console.log("📜 Creating Bhagavad Gita scripture entry...");
-  const scripture = await prisma.scripture.upsert({
-    where: { slug: "bhagavad-gita" },
-    update: {},
-    create: {
-      name: "Bhagavad Gita",
-      nameHi: "भगवद्गीता",
-      slug: "bhagavad-gita",
-      description:
-        "The Bhagavad Gita is a 700-verse Hindu scripture that is part of the Indian epic Mahabharata. It is a dialogue between Prince Arjuna and Lord Krishna, who serves as his charioteer.",
-      descriptionHi:
-        "भगवद्गीता एक 700 श्लोकों वाला हिंदू धर्मग्रंथ है जो भारतीय महाकाव्य महाभारत का हिस्सा है। यह राजकुमार अर्जुन और भगवान कृष्ण के बीच का संवाद है, जो उनके सारथी के रूप में कार्य करते हैं।",
-      totalChapters: 18,
-      totalVerses: 700,
-    },
-  });
-  console.log(`   ✅ Scripture: ${scripture.name} (${scripture.id})\n`);
-
-  // ---- Step 2: Fetch and create chapters ----
-  console.log("📖 Fetching chapters from API...");
-  const chaptersData = await fetchJSON<ChapterData[]>(`${API_BASE}/chapters`);
-  console.log(`   Found ${chaptersData.length} chapters.\n`);
-
-  for (const chData of chaptersData) {
-    console.log(`   📕 Chapter ${chData.chapter_number}: ${chData.translation}`);
-
-    const chapter = await prisma.chapter.upsert({
-      where: {
-        scriptureId_chapterNumber: {
-          scriptureId: scripture.id,
-          chapterNumber: chData.chapter_number,
+  try {
+    // 1. Create Scripture
+    console.log('📜 Creating Bhagavad Gita scripture entry...');
+    let gita = await prisma.scripture.findUnique({ where: { slug: 'bhagavad-gita' } });
+    if (!gita) {
+      gita = await prisma.scripture.create({
+        data: {
+          name: 'Bhagavad Gita',
+          nameHi: 'भगवद्गीता',
+          slug: 'bhagavad-gita',
+          description: 'The Song of God',
+          descriptionHi: 'भगवान का गीत',
+          totalChapters: 18,
+          totalVerses: 700,
         },
-      },
-      update: {
-        name: chData.name,
-        translation: chData.translation,
-        transliteration: chData.transliteration,
-        meaningEn: chData.meaning.en,
-        meaningHi: chData.meaning.hi,
-        summaryEn: chData.summary.en,
-        summaryHi: chData.summary.hi,
-        versesCount: chData.verses_count,
-      },
-      create: {
-        chapterNumber: chData.chapter_number,
-        name: chData.name,
-        translation: chData.translation,
-        transliteration: chData.transliteration,
-        meaningEn: chData.meaning.en,
-        meaningHi: chData.meaning.hi,
-        summaryEn: chData.summary.en,
-        summaryHi: chData.summary.hi,
-        versesCount: chData.verses_count,
-        scriptureId: scripture.id,
-      },
-    });
-
-    // ---- Step 3: Fetch verses for this chapter ----
-    console.log(`      Fetching ${chData.verses_count} verses...`);
-    let versesSeeded = 0;
-    let translationsSeeded = 0;
-    let commentariesSeeded = 0;
-
-    for (let v = 1; v <= chData.verses_count; v++) {
-      try {
-        const verseData = await fetchJSON<VerseData>(
-          `${API_BASE}/slok/${chData.chapter_number}/${v}`
-        );
-
-        const verse = await prisma.verse.upsert({
-          where: { verseId: verseData._id },
-          update: {
-            slok: verseData.slok,
-            transliteration: verseData.transliteration,
-          },
-          create: {
-            verseNumber: verseData.verse,
-            verseId: verseData._id,
-            slok: verseData.slok,
-            transliteration: verseData.transliteration,
-            chapterId: chapter.id,
-          },
-        });
-        versesSeeded++;
-
-        // ---- Step 4: Extract translations and commentaries ----
-        for (const [key, meta] of Object.entries(AUTHOR_META)) {
-          const authorData = verseData[key] as
-            | Record<string, string>
-            | undefined;
-          if (!authorData) continue;
-
-          // English translation (et)
-          if (authorData.et && meta.hasEn) {
-            await prisma.translation.upsert({
-              where: {
-                verseId_authorKey_language: {
-                  verseId: verse.id,
-                  authorKey: key,
-                  language: "en",
-                },
-              },
-              update: { text: authorData.et },
-              create: {
-                language: "en",
-                text: authorData.et,
-                authorName: meta.name,
-                authorKey: key,
-                verseId: verse.id,
-              },
-            });
-            translationsSeeded++;
-          }
-
-          // Hindi translation (ht)
-          if (authorData.ht && meta.hasHi) {
-            await prisma.translation.upsert({
-              where: {
-                verseId_authorKey_language: {
-                  verseId: verse.id,
-                  authorKey: key,
-                  language: "hi",
-                },
-              },
-              update: { text: authorData.ht },
-              create: {
-                language: "hi",
-                text: authorData.ht,
-                authorName: meta.name,
-                authorKey: key,
-                verseId: verse.id,
-              },
-            });
-            translationsSeeded++;
-          }
-
-          // English commentary (ec)
-          if (authorData.ec) {
-            await prisma.commentary.upsert({
-              where: {
-                verseId_authorKey_language: {
-                  verseId: verse.id,
-                  authorKey: key,
-                  language: "en",
-                },
-              },
-              update: { text: authorData.ec },
-              create: {
-                language: "en",
-                text: authorData.ec,
-                authorName: meta.name,
-                authorKey: key,
-                school: meta.school || null,
-                verseId: verse.id,
-              },
-            });
-            commentariesSeeded++;
-          }
-
-          // Hindi commentary (hc)
-          if (authorData.hc) {
-            await prisma.commentary.upsert({
-              where: {
-                verseId_authorKey_language: {
-                  verseId: verse.id,
-                  authorKey: key,
-                  language: "hi",
-                },
-              },
-              update: { text: authorData.hc },
-              create: {
-                language: "hi",
-                text: authorData.hc,
-                authorName: meta.name,
-                authorKey: key,
-                school: meta.school || null,
-                verseId: verse.id,
-              },
-            });
-            commentariesSeeded++;
-          }
-
-          // Sanskrit commentary (sc)
-          if (authorData.sc && meta.hasSanskrit) {
-            await prisma.commentary.upsert({
-              where: {
-                verseId_authorKey_language: {
-                  verseId: verse.id,
-                  authorKey: key,
-                  language: "sa",
-                },
-              },
-              update: { text: authorData.sc },
-              create: {
-                language: "sa",
-                text: authorData.sc,
-                authorName: meta.name,
-                authorKey: key,
-                school: meta.school || null,
-                verseId: verse.id,
-              },
-            });
-            commentariesSeeded++;
-          }
-        }
-      } catch (error) {
-        console.error(
-          `      ⚠️  Error fetching verse ${chData.chapter_number}.${v}:`,
-          error instanceof Error ? error.message : error
-        );
-      }
+      });
     }
 
-    console.log(
-      `      ✅ ${versesSeeded} verses, ${translationsSeeded} translations, ${commentariesSeeded} commentaries\n`
-    );
+    // Fetch datasets
+    console.log('📥 Downloading datasets from gita/gita repository (this may take a moment)...');
+    
+    console.log('   - Fetching chapters.json');
+    const chaptersData = await fetchJson('https://raw.githubusercontent.com/gita/gita/main/data/chapters.json');
+    
+    console.log('   - Fetching verse.json');
+    const versesData = await fetchJson('https://raw.githubusercontent.com/gita/gita/main/data/verse.json');
+    
+    console.log('   - Fetching translation.json');
+    const translationsData = await fetchJson('https://raw.githubusercontent.com/gita/gita/main/data/translation.json');
+    
+    console.log('   - Fetching commentary.json (28MB)');
+    const commentariesData = await fetchJson('https://raw.githubusercontent.com/gita/gita/main/data/commentary.json');
+
+    console.log('✅ Datasets downloaded successfully.\n');
+
+    // 2. Insert Chapters
+    console.log('📖 Processing Chapters...');
+    const chapterMap = new Map<number, string>(); // chapter_number -> ourChapterId
+
+    for (const ch of chaptersData) {
+      const chapter = await prisma.chapter.create({
+        data: {
+          scriptureId: gita.id,
+          chapterNumber: ch.chapter_number,
+          name: ch.name || `Chapter ${ch.chapter_number}`,
+          translation: ch.name_translation || `Chapter ${ch.chapter_number}`,
+          transliteration: ch.name_meaning || '',
+          meaningEn: ch.name_meaning || '',
+          meaningHi: ch.name || '',
+          summaryEn: ch.chapter_summary || '',
+          summaryHi: ch.chapter_summary_hindi || '',
+          versesCount: ch.verses_count || 0,
+        },
+      });
+      chapterMap.set(ch.chapter_number, chapter.id);
+    }
+    console.log(`   ✅ Inserted ${chaptersData.length} chapters.`);
+
+    // 3. Insert Verses
+    console.log('📖 Processing Verses...');
+    const verseIdMap = new Map<number, string>(); // gita/gita verse_id -> ourVerseId
+
+    for (const v of versesData) {
+      const chapterId = chapterMap.get(v.chapter_number);
+      if (!chapterId) continue;
+
+      const verse = await prisma.verse.create({
+        data: {
+          chapterId: chapterId,
+          verseNumber: v.verse_number,
+          verseId: `BG${v.chapter_number}.${v.verse_number}`,
+          slok: v.text || '',
+          transliteration: v.transliteration || '',
+          wordMeanings: v.word_meanings || '',
+        },
+      });
+      verseIdMap.set(v.id, verse.id);
+    }
+    console.log(`   ✅ Inserted ${versesData.length} verses.`);
+
+    // 4. Process Translations (Batching for performance)
+    console.log('🌐 Processing Translations...');
+    let translationCount = 0;
+    const translationBatches = [];
+    let currentBatch: any[] = [];
+
+    for (const t of translationsData) {
+      const ourVerseId = verseIdMap.get(t.verse_id);
+      if (!ourVerseId) continue;
+
+      currentBatch.push({
+        verseId: ourVerseId,
+        language: t.lang === 'hindi' ? 'hi' : t.lang === 'sanskrit' ? 'sa' : 'en',
+        text: t.description || '',
+        authorName: t.authorName || 'Unknown',
+        authorKey: t.authorName ? t.authorName.toLowerCase().replace(/\\s+/g, '-') : 'unknown',
+      });
+
+      if (currentBatch.length >= 2000) {
+        translationBatches.push(currentBatch);
+        currentBatch = [];
+      }
+    }
+    if (currentBatch.length > 0) translationBatches.push(currentBatch);
+
+    for (const batch of translationBatches) {
+      // Prisma createMany is not fully supported by pg adapter in all cases, so we loop or do createMany
+      await prisma.translation.createMany({
+        data: batch,
+        skipDuplicates: true,
+      });
+      translationCount += batch.length;
+    }
+    console.log(`   ✅ Inserted ${translationCount} translations.`);
+
+    // 5. Process Commentaries (Batching)
+    console.log('📚 Processing Commentaries...');
+    let commentaryCount = 0;
+    const commentaryBatches = [];
+    currentBatch = [];
+
+    for (const c of commentariesData) {
+      const ourVerseId = verseIdMap.get(c.verse_id);
+      if (!ourVerseId) continue;
+
+      currentBatch.push({
+        verseId: ourVerseId,
+        language: c.lang === 'hindi' ? 'hi' : c.lang === 'sanskrit' ? 'sa' : 'en',
+        text: c.description || '',
+        authorName: c.authorName || 'Unknown',
+        authorKey: c.authorName ? c.authorName.toLowerCase().replace(/\\s+/g, '-') : 'unknown',
+        school: null,
+      });
+
+      if (currentBatch.length >= 2000) {
+        commentaryBatches.push(currentBatch);
+        currentBatch = [];
+      }
+    }
+    if (currentBatch.length > 0) commentaryBatches.push(currentBatch);
+
+    for (let i = 0; i < commentaryBatches.length; i++) {
+      const batch = commentaryBatches[i];
+      await prisma.commentary.createMany({
+        data: batch,
+        skipDuplicates: true,
+      });
+      commentaryCount += batch.length;
+      process.stdout.write(`\r   Progress: ${Math.round(((i + 1) / commentaryBatches.length) * 100)}% (${commentaryCount} inserted)`);
+    }
+    console.log(`\n   ✅ Inserted ${commentaryCount} commentaries.`);
+
+    console.log('\n🎉 Seeding complete!');
+
+  } catch (e) {
+    console.error(e);
+    process.exit(1);
+  } finally {
+    await prisma.$disconnect();
   }
-
-  // ---- Final counts ----
-  const totalVerses = await prisma.verse.count();
-  const totalTranslations = await prisma.translation.count();
-  const totalCommentaries = await prisma.commentary.count();
-
-  console.log("\n🎉 Seeding complete!");
-  console.log("===================");
-  console.log(`   📜 1 Scripture`);
-  console.log(`   📕 ${chaptersData.length} Chapters`);
-  console.log(`   📝 ${totalVerses} Verses`);
-  console.log(`   🌐 ${totalTranslations} Translations`);
-  console.log(`   📚 ${totalCommentaries} Commentaries`);
 }
 
-seed()
-  .catch((e) => {
-    console.error("❌ Seed failed:", e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+main();

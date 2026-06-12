@@ -4,7 +4,8 @@ import { prisma } from "@/lib/db";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { ArrowLeft, ArrowRight, BookOpen, Quote } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export async function generateMetadata({
   params,
@@ -74,21 +75,27 @@ export default async function VersePage({
             </Link>
 
             <div className="flex items-center gap-2">
-              <Button variant="outline" size="icon" asChild disabled={!hasPrev}>
-                <Link href={hasPrev ? `/verses/${chapterNumber}/${verseNumber - 1}` : "#"} className={!hasPrev ? "pointer-events-none opacity-50" : ""}>
-                  <ArrowLeft className="size-4" />
-                  <span className="sr-only">Previous Verse</span>
-                </Link>
-              </Button>
+              <Link 
+                href={hasPrev ? `/verses/${chapterNumber}/${verseNumber - 1}` : "#"} 
+                className={cn(buttonVariants({ variant: "outline", size: "icon" }), !hasPrev && "pointer-events-none opacity-50")}
+                aria-disabled={!hasPrev}
+              >
+                <ArrowLeft className="size-4" />
+                <span className="sr-only">Previous Verse</span>
+              </Link>
+              
               <div className="flex w-24 items-center justify-center font-medium">
                 BG {chapterNumber}.{verseNumber}
               </div>
-              <Button variant="outline" size="icon" asChild disabled={!hasNext}>
-                <Link href={hasNext ? `/verses/${chapterNumber}/${verseNumber + 1}` : "#"} className={!hasNext ? "pointer-events-none opacity-50" : ""}>
-                  <ArrowRight className="size-4" />
-                  <span className="sr-only">Next Verse</span>
-                </Link>
-              </Button>
+              
+              <Link 
+                href={hasNext ? `/verses/${chapterNumber}/${verseNumber + 1}` : "#"} 
+                className={cn(buttonVariants({ variant: "outline", size: "icon" }), !hasNext && "pointer-events-none opacity-50")}
+                aria-disabled={!hasNext}
+              >
+                <ArrowRight className="size-4" />
+                <span className="sr-only">Next Verse</span>
+              </Link>
             </div>
           </div>
         </div>
@@ -117,6 +124,28 @@ export default async function VersePage({
                 ))}
               </p>
             </div>
+
+            {/* Word-by-Word Meanings */}
+            {verse.wordMeanings && (
+              <div className="mx-auto mt-8 max-w-2xl rounded-xl border border-primary/20 bg-primary/5 p-6 text-left shadow-inner">
+                <h3 className="mb-3 text-sm font-bold uppercase tracking-wider text-primary">Word Meanings (Anvaya)</h3>
+                <p className="leading-relaxed text-foreground/90">
+                  {verse.wordMeanings.split(';').map((wordPair, i) => {
+                    const parts = wordPair.split('—');
+                    if (parts.length === 2) {
+                      return (
+                        <span key={i} className="inline-block mr-4 mb-2">
+                          <span className="font-semibold text-foreground">{parts[0].trim()}</span>
+                          <span className="text-muted-foreground mx-1">—</span>
+                          <span className="text-foreground/80">{parts[1].trim()}</span>
+                        </span>
+                      );
+                    }
+                    return <span key={i} className="mr-2">{wordPair.trim()}</span>;
+                  })}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* English Translations */}
