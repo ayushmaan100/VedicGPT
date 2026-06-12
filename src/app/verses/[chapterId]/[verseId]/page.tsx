@@ -18,6 +18,13 @@ export async function generateMetadata({
   return {
     title: `Bhagavad Gita ${chapterId}.${verseId} | VedicGPT`,
     description: `Read Verse ${chapterId}.${verseId} of the Bhagavad Gita with original Sanskrit, translation, and philosophical commentaries.`,
+    openGraph: {
+      title: `Bhagavad Gita ${chapterId}.${verseId} | VedicGPT`,
+      description: `Read Verse ${chapterId}.${verseId} of the Bhagavad Gita with original Sanskrit, translation, and philosophical commentaries.`,
+      url: `https://vedicgpt.com/verses/${chapterId}/${verseId}`,
+      siteName: "VedicGPT",
+      type: "article",
+    },
   };
 }
 
@@ -36,7 +43,7 @@ export default async function VersePage({
 
   const chapter = await prisma.chapter.findFirst({
     where: { chapterNumber },
-    select: { id: true, translation: true, versesCount: true },
+    select: { id: true, chapterNumber: true, translation: true, versesCount: true },
   });
 
   if (!chapter) notFound();
@@ -63,8 +70,25 @@ export default async function VersePage({
   // Bookmark logic
   const isBookmarked = await checkIsBookmarked(verse.id);
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Article",
+    "headline": `Bhagavad Gita ${chapterNumber}.${verseNumber}`,
+    "articleBody": verse.transliteration.replace(/\n/g, " "),
+    "url": `https://vedicgpt.com/verses/${chapterNumber}/${verseNumber}`,
+    "isPartOf": {
+      "@type": "Chapter",
+      "name": `Chapter ${chapter.chapterNumber}: ${chapter.translation}`,
+      "position": chapter.chapterNumber
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Header />
 
       <main className="flex-1 bg-background">

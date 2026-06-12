@@ -26,6 +26,13 @@ export async function generateMetadata({
   return {
     title: `Chapter ${chapterNumber}: ${chapter.translation} | VedicGPT`,
     description: `Read Chapter ${chapterNumber} (${chapter.name}) of the Bhagavad Gita with all verses and commentaries.`,
+    openGraph: {
+      title: `Chapter ${chapterNumber}: ${chapter.translation} | VedicGPT`,
+      description: `Read Chapter ${chapterNumber} (${chapter.name}) of the Bhagavad Gita with all verses and commentaries.`,
+      url: `https://vedicgpt.com/chapters/${chapterNumber}`,
+      siteName: "VedicGPT",
+      type: "article",
+    },
   };
 }
 
@@ -54,8 +61,24 @@ export default async function ChapterPage({
     notFound();
   }
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Chapter",
+    "name": `Chapter ${chapter.chapterNumber}: ${chapter.translation}`,
+    "description": chapter.summaryEn,
+    "position": chapter.chapterNumber,
+    "isPartOf": {
+      "@type": "Book",
+      "name": "Bhagavad Gita"
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Header />
 
       <main className="flex-1">

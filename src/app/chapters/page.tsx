@@ -4,9 +4,18 @@ import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { BookOpen } from "lucide-react";
 
-export const metadata = {
+import { Metadata } from "next";
+
+export const metadata: Metadata = {
   title: "All Chapters | VedicGPT",
-  description: "Explore all 18 chapters of the Bhagavad Gita.",
+  description: "Explore all 18 chapters of the Bhagavad Gita. Find summaries, verse counts, and deep philosophical insights for each chapter.",
+  openGraph: {
+    title: "All 18 Chapters of the Bhagavad Gita | VedicGPT",
+    description: "Explore all 18 chapters of the Bhagavad Gita. Find summaries, verse counts, and deep philosophical insights.",
+    url: "https://vedicgpt.com/chapters",
+    siteName: "VedicGPT",
+    type: "website",
+  },
 };
 
 export default async function ChaptersPage() {
@@ -15,8 +24,24 @@ export default async function ChaptersPage() {
     orderBy: { chapterNumber: "asc" },
   });
 
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "itemListElement": chapters.map((chapter, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "url": `https://vedicgpt.com/chapters/${chapter.chapterNumber}`,
+      "name": `Chapter ${chapter.chapterNumber}: ${chapter.translation}`,
+      "description": chapter.summaryEn
+    }))
+  };
+
   return (
     <div className="flex min-h-screen flex-col">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <Header />
 
       <main className="flex-1">
